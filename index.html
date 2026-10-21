@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuiz Gerak Isyarat Tangan Interaktif</title>
+    <!-- Tailwind CSS untuk reka bentuk moden dan responsif -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome untuk ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MediaPipe Hands, Drawing Utils dan Camera Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .mirror-video {
+            transform: scaleX(-1);
+        }
+        /* Animasi nadi untuk elemen interaktif */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.8); }
+        }
+        .glow-effect {
+            animation: pulse-glow 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-between p-4 selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header Utama -->
+    <header class="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between py-4 border-b border-indigo-500/20 mb-6">
+        <div class="flex items-center gap-3 mb-2 sm:mb-0">
+            <div class="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-500/30 flex items-center justify-center">
+                <i class="fa-solid fa-hand-sparkles text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">GestureQuest AI</h1>
+                <p class="text-xs text-slate-400">Kuiz Pintar Gerak Isyarat Tangan MediaPipe</p>
+            </div>
+        </div>
+        <div id="status-bar" class="hidden flex items-center gap-6 bg-slate-800/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-slate-700 shadow-xl">
+            <div class="flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-trophy text-amber-400"></i>
+                <span class="text-slate-400">Skor:</span>
+                <span id="score-display" class="font-bold text-white text-base">0</span>
+            </div>
+            <div class="h-4 w-px bg-slate-700"></div>
+            <div class="flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-clock text-cyan-400"></i>
+                <span class="text-slate-400">Masa:</span>
+                <span id="timer-display" class="font-bold text-white text-base">15s</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Kandungan Utama (Skrin Mula, Kuiz, & Keputusan) -->
+    <main class="w-full max-w-5xl flex-1 flex flex-col items-center justify-center relative">
+
+        <!-- Skrin Mula / Menu -->
+        <div id="start-screen" class="w-full max-w-2xl bg-slate-800/60 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl text-center flex flex-col items-center">
+            <div class="w-20 h-20 bg-indigo-600/20 border border-indigo-500/30 rounded-full flex items-center justify-center mb-6 text-indigo-400 text-3xl glow-effect">
+                <i class="fa-solid fa-hand"></i>
+            </div>
+            <h2 class="text-3xl sm:text-4xl font-extrabold mb-3 text-white">Cabaran Kuiz Isyarat Tangan</h2>
+            <p class="text-slate-300 text-sm sm:text-base mb-8 max-w-lg leading-relaxed">
+                Jawab soalan pilihan berganda dengan menunjukkan bilangan jari yang betul di hadapan kamera web (1 Jari = A, 2 Jari = B, 3 Jari = C, 4 Jari = D) atau klik pilihan dengan tetikus anda.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mb-8 text-left">
+                <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60 flex items-start gap-3">
+                    <div class="bg-indigo-500/20 text-indigo-400 p-2.5 rounded-xl mt-0.5"><i class="fa-solid fa-video"></i></div>
+                    <div>
+                        <h4 class="font-semibold text-sm text-white">Mod Kamera Web</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Tunjukkan 1 hingga 4 jari untuk memilih jawapan secara automatik.</p>
+                    </div>
+                </div>
+                <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60 flex items-start gap-3">
+                    <div class="bg-cyan-500/20 text-cyan-400 p-2.5 rounded-xl mt-0.5"><i class="fa-solid fa-computer-mouse"></i></div>
+                    <div>
+                        <h4 class="font-semibold text-sm text-white">Mod Alternatif Tetikus</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Boleh klik terus pada pilihan jawapan jika kamera ditutup.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="start-btn" class="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-3 text-base">
+                <i class="fa-solid fa-play"></i> Mulakan Permainan Sekarang
+            </button>
+        </div>
+
+        <!-- Skrin Pemuatan Model / Kamera -->
+        <div id="loading-screen" class="hidden flex-col items-center justify-center p-8 text-center">
+            <div class="relative w-16 h-16 mb-6">
+                <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Memuatkan Model MediaPipe Hands...</h3>
+            <p id="loading-status" class="text-sm text-slate-400">Sila benarkan akses kamera web apabila diminta.</p>
+        </div>
+
+        <!-- Skrin Kuiz Aktif -->
+        <div id="quiz-screen" class="hidden w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- Bahagian Kiri: Soalan & Pilihan -->
+            <div class="lg:col-span-7 flex flex-col gap-6">
+                <div class="bg-slate-800/80 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden">
+                    <!-- Progress Bar Soalan -->
+                    <div class="flex items-center justify-between text-xs font-semibold text-slate-400 mb-4">
+                        <span id="question-counter">Soalan 1 dari 5</span>
+                        <span id="gesture-hint" class="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1.5">
+                            <i class="fa-solid fa-hand-point-up"></i> Isyarat Aktif: Menunggu Jari...
+                        </span>
+                    </div>
+
+                    <!-- Teks Soalan -->
+                    <h3 id="question-text" class="text-xl sm:text-2xl font-bold text-white mb-6 leading-snug">
+                        Apakah ibu negara bagi Malaysia?
+                    </h3>
+
+                    <!-- Senarai Pilihan Jawapan -->
+                    <div id="options-container" class="grid grid-cols-1 gap-3.5">
+                        <!-- Pilihan akan dimasukkan melalui JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bahagian Kanan: Paparan Kamera Web & Visual Isyarat -->
+            <div class="lg:col-span-5 flex flex-col gap-4">
+                <div class="bg-slate-800/80 backdrop-blur-xl p-4 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden flex flex-col items-center">
+                    <div class="w-full flex items-center justify-between mb-3 px-1">
+                        <span class="text-xs font-semibold text-slate-400 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> Paparan Kamera & Pengesanan
+                        </span>
+                        <span id="detected-fingers" class="text-xs font-bold bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 text-cyan-400">
+                            Jari dikesan: 0
+                        </span>
+                    </div>
+
+                    <!-- Elemen Video & Canvas -->
+                    <div class="relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 shadow-inner flex items-center justify-center">
+                        <video id="webcam" class="absolute inset-0 w-full h-full object-cover mirror-video" autoplay playsinline muted></video>
+                        <canvas id="output_canvas" class="absolute inset-0 w-full h-full object-cover mirror-video pointer-events-none"></canvas>
+                        <!-- Petunjuk visual masa nyata -->
+                        <div id="camera-overlay-msg" class="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center text-center p-4 transition-opacity duration-300">
+                            <i class="fa-solid fa-camera text-3xl text-indigo-400 mb-2 animate-bounce"></i>
+                            <p class="text-xs text-slate-300">Menghidupkan kamera & memuatkan pengesan tangan...</p>
+                        </div>
+                    </div>
+
+                    <!-- Panduan Isyarat Bawah Kamera -->
+                    <div class="grid grid-cols-4 gap-2 w-full mt-3 text-center">
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/60">
+                            <span class="block text-xs font-bold text-indigo-400">1 Jari</span>
+                            <span class="text-[10px] text-slate-400">Pilihan A</span>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/60">
+                            <span class="block text-xs font-bold text-indigo-400">2 Jari</span>
+                            <span class="text-[10px] text-slate-400">Pilihan B</span>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/60">
+                            <span class="block text-xs font-bold text-indigo-400">3 Jari</span>
+                            <span class="text-[10px] text-slate-400">Pilihan C</span>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/60">
+                            <span class="block text-xs font-bold text-indigo-400">4 Jari</span>
+                            <span class="text-[10px] text-slate-400">Pilihan D</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Skrin Keputusan / Tamat Kuiz -->
+        <div id="result-screen" class="hidden w-full max-w-xl bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl text-center flex flex-col items-center">
+            <div id="result-icon-container" class="w-20 h-20 bg-amber-500/20 border border-amber-500/30 rounded-full flex items-center justify-center mb-6 text-amber-400 text-3xl glow-effect">
+                <i class="fa-solid fa-award"></i>
+            </div>
+            <h2 class="text-3xl font-extrabold mb-2 text-white">Kuiz Selesai!</h2>
+            <p id="result-subtitle" class="text-slate-300 text-sm mb-6">Tahniah kerana berjaya menamatkan cabaran ini.</p>
+
+            <div class="bg-slate-900/80 w-full p-6 rounded-2xl border border-slate-700 mb-8 flex justify-around items-center">
+                <div>
+                    <span class="block text-xs text-slate-400 mb-1">Skor Akhir</span>
+                    <span id="final-score" class="text-3xl font-extrabold text-indigo-400">0/5</span>
+                </div>
+                <div class="h-10 w-px bg-slate-700"></div>
+                <div>
+                    <span class="block text-xs text-slate-400 mb-1">Peratusan</span>
+                    <span id="final-percentage" class="text-3xl font-extrabold text-cyan-400">0%</span>
+                </div>
+            </div>
+
+            <button id="restart-btn" class="w-full py-4 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 transition-all duration-300 flex items-center justify-center gap-3 text-base">
+                <i class="fa-solid fa-rotate-right"></i> Cuba Semula Kuiz
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full max-w-5xl text-center py-4 border-t border-slate-800 text-xs text-slate-500 mt-6">
+        Dikuasakan oleh MediaPipe Hands & Tailwind CSS • Interaktif Gerak Isyarat Tangan
+    </footer>
+
+    <!-- Logik JavaScript Utama -->
+    <script>
+        // Data Soalan Kuiz
+        const quizData = [
+            {
+                question: "Apakah ibu negara bagi Malaysia?",
+                options: ["Kuala Lumpur", "Putrajaya", "George Town", "Johor Bahru"],
+                correct: 0
+            },
+            {
+                question: "Apakah planet yang dikenali sebagai Planet Merah?",
+                options: ["Venus", "Marikh", "Musytari", "Zuhal"],
+                correct: 1
+            },
+            {
+                question: "Berapakah nilai bagi 9 darab dengan 8?",
+                options: ["72", "64", "81", "56"],
+                correct: 0
+            },
+            {
+                question: "Apakah elemen kimia dengan simbol 'O'?",
+                options: ["Emas", "Oksigen", "Perak", "Hidrogen"],
+                correct: 1
+            },
+            {
+                question: "Apakah lautan terbesar di dunia?",
+                options: ["Lautan Atlantik", "Lautan Hindi", "Lautan Pasifik", "Lautan Artik"],
+                correct: 2
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let timer = 15;
+        let timerInterval = null;
+        let isAnswered = false;
+        let selectedOptionIndex = null;
+
+        // Pembolehubah MediaPipe & Kamera
+        let videoElement = document.getElementById('webcam');
+        let canvasElement = document.getElementById('output_canvas');
+        let canvasCtx = canvasElement.getContext('2d');
+        let hands = null;
+        let camera = null;
+        let stableGestureCount = 0;
+        let lastDetectedFingerCount = 0;
+        const requiredStableFrames = 10; // Bingkai diperlukan untuk mengesahkan isyarat
+
+        // Elemen DOM
+        const startScreen = document.getElementById('start-screen');
+        const loadingScreen = document.getElementById('loading-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const statusBar = document.getElementById('status-bar');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const scoreDisplay = document.getElementById('score-display');
+        const timerDisplay = document.getElementById('timer-display');
+        const questionCounter = document.getElementById('question-counter');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const detectedFingers = document.getElementById('detected-fingers');
+        const gestureHint = document.getElementById('gesture-hint');
+        const cameraOverlayMsg = document.getElementById('camera-overlay-msg');
+        const finalScore = document.getElementById('final-score');
+        const finalPercentage = document.getElementById('final-percentage');
+
+        // Event Listeners Mula & Semula
+        startBtn.addEventListener('click', startQuizProcess);
+        restartBtn.addEventListener('click', resetQuiz);
+
+        function startQuizProcess() {
+            startScreen.classList.add('hidden');
+            loadingScreen.classList.remove('hidden');
+            document.getElementById('loading-status').innerText = "Menghubungkan kamera web...";
+
+            setTimeout(() => {
+                initMediaPipe();
+            }, 500);
+        }
+
+        function initMediaPipe() {
+            try {
+                hands = new Hands({
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                });
+
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.6,
+                    minTrackingConfidence: 0.6
+                });
+
+                hands.onResults(onHandResults);
+
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 640,
+                    height: 480
+                });
+
+                camera.start().then(() => {
+                    loadingScreen.classList.add('hidden');
+                    quizScreen.classList.remove('hidden');
+                    statusBar.classList.remove('hidden');
+                    cameraOverlayMsg.classList.add('opacity-0');
+                    setTimeout(() => cameraOverlayMsg.style.display = 'none', 300);
+                    loadQuestion();
+                }).catch(err => {
+                    console.error("Ralat Kamera:", err);
+                    document.getElementById('loading-status').innerText = "Ralat: Gagal mengakses kamera web. Sila pastikan kebenaran diberikan.";
+                });
+
+            } catch (e) {
+                console.error("Ralat Permulaan MediaPipe:", e);
+                document.getElementById('loading-status').innerText = "Gagal memuatkan skrip MediaPipe.";
+            }
+        }
+
+        // Pengiraan Jari yang Diangkat daripada Landmark Tangan
+        function countRaisedFingers(landmarks) {
+            // Indeks tip jari: Ibu jari (4), Telunjuk (8), Tengah (12), Manis (16), Kelingking (20)
+            // Sendi buku/bawah tip: Ibu jari (3), Telunjuk (6), Tengah (10), Manis (14), Kelingking (18)
+            let raised = 0;
+
+            // Semakan Ibu Jari (bandingkan koordinat x berdasarkan orientasi tangan kiri/kanan)
+            // Untuk ringkasan mudah dalam mod cermin (mirror), bandingkan kedudukan x tip dan buku sendi
+            if (landmarks[4].x < landmarks[3].x) {
+                raised++;
+            }
+
+            // Semakan 4 Jari Lain (bandingkan koordinat y tip dengan sendi tengah)
+            const fingerTips = [8, 12, 16, 20];
+            const fingerBases = [6, 10, 14, 18];
+
+            for (let i = 0; i < 4; i++) {
+                if (landmarks[fingerTips[i]].y < landmarks[fingerBases[i]].y) {
+                    raised++;
+                }
+            }
+            return raised;
+        }
+
+        function onHandResults(results) {
+            canvasElement.width = videoElement.videoWidth || 640;
+            canvasElement.height = videoElement.videoHeight || 480;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Lukis sambungan tangan pada canvas
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#6366f1', lineWidth: 3 });
+                drawLandmarks(canvasCtx, landmarks, { color: '#22d3ee', lineWidth: 1, radius: 4 });
+
+                const fingers = countRaisedFingers(landmarks);
+                detectedFingers.innerText = `Jari dikesan: ${fingers}`;
+
+                // Logik kestabilan isyarat (elakkan salah pilih akibat bingkai tidak stabil)
+                if (fingers >= 1 && fingers <= 4) {
+                    if (fingers === lastDetectedFingerCount) {
+                        stableGestureCount++;
+                        if (stableGestureCount >= requiredStableFrames && !isAnswered) {
+                            selectOptionByGesture(fingers - 1); // 1 jari = index 0 (A), dst.
+                        }
+                    } else {
+                        lastDetectedFingerCount = fingers;
+                        stableGestureCount = 1;
+                    }
+                    gestureHint.innerHTML = `<i class="fa-solid fa-hand-holding"></i> Isyarat: Pilihan ${String.fromCharCode(65 + fingers - 1)}`;
+                } else {
+                    stableGestureCount = 0;
+                    gestureHint.innerHTML = `<i class="fa-solid fa-hand-point-up"></i> Tunjuk 1-4 Jari`;
+                }
+            } else {
+                detectedFingers.innerText = "Jari dikesan: Tiada";
+                gestureHint.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Tiada Tangan Dikesan`;
+                stableGestureCount = 0;
+            }
+            canvasCtx.restore();
+        }
+
+        // Muat Soalan Kuiz
+        function loadQuestion() {
+            isAnswered = false;
+            selectedOptionIndex = null;
+            stableGestureCount = 0;
+            lastDetectedFingerCount = 0;
+
+            if (currentQuestionIndex >= quizData.length) {
+                endQuiz();
+                return;
+            }
+
+            const currentQ = quizData[currentQuestionIndex];
+            questionCounter.innerText = `Soalan ${currentQuestionIndex + 1} dari ${quizData.length}`;
+            questionText.innerText = currentQ.question;
+
+            optionsContainer.innerHTML = '';
+            const labels = ['A', 'B', 'C', 'D'];
+
+            currentQ.options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.className = `w-full p-4 rounded-2xl border border-slate-700 bg-slate-900/60 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300 flex items-center justify-between text-left group cursor-pointer`;
+                button.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <span class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">${labels[index]}</span>
+                        <span class="text-white font-medium text-sm sm:text-base">${option}</span>
+                    </div>
+                    <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider">${labels[index]} (${index + 1} Jari)</span>
+                `;
+                // Sokongan tetikus sebagai alternatif
+                button.addEventListener('click', () => {
+                    if (!isAnswered) {
+                        selectOptionByMouse(index);
+                    }
+                });
+                optionsContainer.appendChild(button);
+            });
+
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timer = 15;
+            timerDisplay.innerText = `${timer}s`;
+
+            timerInterval = setInterval(() => {
+                timer--;
+                timerDisplay.innerText = `${timer}s`;
+                if (timer <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        function handleTimeOut() {
+            if (isAnswered) return;
+            isAnswered = true;
+            highlightAnswers(-1); // Tiada pilihan dipilih
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadQuestion();
+            }, 1500);
+        }
+
+        function selectOptionByGesture(index) {
+            if (isAnswered) return;
+            isAnswered = true;
+            clearInterval(timerInterval);
+            selectedOptionIndex = index;
+            highlightAnswers(index);
+
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadQuestion();
+            }, 1800);
+        }
+
+        function selectOptionByMouse(index) {
+            if (isAnswered) return;
+            isAnswered = true;
+            clearInterval(timerInterval);
+            selectedOptionIndex = index;
+            highlightAnswers(index);
+
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadQuestion();
+            }, 1800);
+        }
+
+        function highlightAnswers(selectedIndex) {
+            const currentQ = quizData[currentQuestionIndex];
+            const optionButtons = optionsContainer.children;
+
+            for (let i = 0; i < optionButtons.length; i++) {
+                const btn = optionButtons[i];
+                btn.style.pointerEvents = 'none'; // Nyahaktifkan klik lanjut
+
+                if (i === currentQ.correct) {
+                    btn.classList.remove('bg-slate-900/60', 'border-slate-700');
+                    btn.classList.add('bg-emerald-600/20', 'border-emerald-500', 'shadow-lg', 'shadow-emerald-500/20');
+                    btn.querySelector('span:first-child').classList.replace('bg-slate-800', 'bg-emerald-600');
+                    btn.querySelector('span:first-child').classList.replace('text-indigo-400', 'text-white');
+                } else if (i === selectedIndex && selectedIndex !== currentQ.correct) {
+                    btn.classList.remove('bg-slate-900/60', 'border-slate-700');
+                    btn.classList.add('bg-rose-600/20', 'border-rose-500');
+                    btn.querySelector('span:first-child').classList.replace('bg-slate-800', 'bg-rose-600');
+                    btn.querySelector('span:first-child').classList.replace('text-indigo-400', 'text-white');
+                }
+            }
+
+            if (selectedIndex === currentQ.correct) {
+                score += 10;
+                scoreDisplay.innerText = score;
+            }
+        }
+
+        function endQuiz() {
+            if (camera) {
+                try { camera.stop(); } catch(e) {}
+            }
+            quizScreen.classList.add('hidden');
+            statusBar.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+
+            const totalPossibleScore = quizData.length * 10;
+            const percentage = Math.round((score / totalPossibleScore) * 100);
+
+            finalScore.innerText = `${score} / ${totalPossibleScore}`;
+            finalPercentage.innerText = `${percentage}%`;
+
+            const subtext = document.getElementById('result-subtitle');
+            if (percentage >= 80) {
+                subtext.innerText = "Hebat! Anda menguasai kemahiran gerak isyarat tangan dengan cemerlang.";
+            } else if (percentage >= 50) {
+                subtext.innerText = "Usaha yang baik! Teruskan berlatih kawalan jari anda.";
+            } else {
+                subtext.innerText = "Cuba lagi! Pastikan pencahayaan terang dan jari ditunjukkan dengan jelas.";
+            }
+        }
+
+        function resetQuiz() {
+            currentQuestionIndex = 0;
+            score = 0;
+            scoreDisplay.innerText = "0";
+            resultScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
